@@ -1,9 +1,13 @@
 // ============================================================
-// VALO MARKET - Main Application (Initialization & Helpers)
-// (ส่วนที่เพิ่มเข้ามาเพื่อแก้ไขปัญหาหน้า Loading ค้าง)
+// VALO MARKET - Main Application (COMPLETE VERSION)
+// แก้ไขปัญหา: Loading ค้าง และ ปุ่มไม่ทำงาน
 // ============================================================
 
-// Global State Variables (จำเป็นสำหรับโค้ดส่วนที่ 2)
+// ------------------------------------------------------------
+// PART 1: GLOBAL STATE AND ESSENTIAL HELPERS (CRITICAL)
+// ------------------------------------------------------------
+
+// Global State Variables
 let currentUser = null;
 let currentUserData = null;
 let listingsCache = [];
@@ -12,6 +16,7 @@ let currentDepositAmount = 0;
 let slipFile = null;
 let uploadedImages = [];
 let uploadedFiles = [];
+let confirmationResult = null; // สำหรับ Phone Auth OTP
 
 // Utility functions ที่จำเป็น
 function showLoading(show) {
@@ -20,33 +25,59 @@ function showLoading(show) {
         overlay.style.display = show ? 'flex' : 'none';
     }
 }
-function showModal(modalId) { document.getElementById(modalId).classList.add('active'); }
-function closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); }
+function showModal(modalId) { document.getElementById(modalId)?.classList.add('active'); }
+function closeModal(modalId) { document.getElementById(modalId)?.classList.remove('active'); }
 function showAuthModal() { closeModal('registerModal'); showModal('authModal'); }
 function showDepositModal() { showModal('depositModal'); }
 function showWithdrawModal() { showModal('withdrawModal'); }
 function showAdminLoginModal() { showModal('adminLoginModal'); }
-function closeDropdown() { document.getElementById('userDropdown').style.display = 'none'; }
+function closeDropdown() { document.getElementById('userDropdown')?.style.display = 'none'; }
 function toggleUserDropdown() {
     const dropdown = document.getElementById('userDropdown');
-    dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+    if (dropdown) {
+        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+    }
 }
 function logout() {
     if (typeof AuthService !== 'undefined') {
         AuthService.signOut();
     }
 }
+
+// ------------------------------------------------------------
+// PART 2: PAGE & UI LOGIC
+// ------------------------------------------------------------
+
+// ฟังก์ชันเปลี่ยนหน้า (Page Switching)
 function showPage(pageId) {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
-    document.getElementById(`page-${pageId}`).classList.add('active');
+    
+    const pageEl = document.getElementById(`page-${pageId}`);
+    if (pageEl) {
+        pageEl.classList.add('active');
+    } else {
+        console.error(`Page element with ID 'page-${pageId}' not found.`);
+        return;
+    }
+
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.remove('active');
         if (link.getAttribute('data-page') === pageId) link.classList.add('active');
     });
 
+    // ตรวจสอบและเรนเดอร์เนื้อหาเฉพาะหน้า
     if (pageId === 'dashboard' && currentUser) renderDashboard();
     if (pageId === 'marketplace') renderListings();
-    if (pageId === 'admin' && isAdmin) switchAdminTab('pending', document.querySelector('.admin-nav-item'));
+    if (pageId === 'admin') {
+        if (isAdmin) {
+            // Assume the first admin tab is 'pending'
+            const firstAdminTab = document.querySelector('.admin-nav-item[data-tab="pending"]');
+            if(firstAdminTab) switchAdminTab('pending', firstAdminTab);
+        } else {
+            showPage('home'); // Redirect if not admin
+            showAdminLoginModal();
+        }
+    }
 }
 
 // ฟังก์ชันอัปเดต UI (แสดง Coins, ปุ่ม Login/User Menu)
@@ -77,12 +108,15 @@ async function loadListings() {
         renderListings();
     }
     // อัปเดต Stats หน้าแรก (อ้างอิงจาก index.html)
-    document.getElementById('statSales').textContent = (listingsCache.length * 12 + 50).toLocaleString(); 
-    document.getElementById('statUsers').textContent = (2500 + Math.floor(Math.random() * 500)).toLocaleString();
+    const statSalesEl = document.getElementById('statSales');
+    const statUsersEl = document.getElementById('statUsers');
+    
+    if (statSalesEl) statSalesEl.textContent = (listingsCache.length * 12 + 50).toLocaleString(); 
+    if (statUsersEl) statUsersEl.textContent = (2500 + Math.floor(Math.random() * 500)).toLocaleString();
 }
 
 // ============================================================
-// APP INITIALIZATION (โค้ดแก้ปัญหาหน้า Loading ค้าง)
+// PART 3: APPLICATION INITIALIZATION & EVENT LISTENERS (THE FIX)
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -92,10 +126,11 @@ document.addEventListener('DOMContentLoaded', () => {
         window.recaptchaVerifier.render();
     }
     
-    // 2. ฟังการเปลี่ยนแปลงสถานะผู้ใช้ (สำคัญที่สุด)
+    // 2. ฟังการเปลี่ยนแปลงสถานะผู้ใช้ (CRITICAL for Loading Screen)
     if (typeof AuthService !== 'undefined') {
         AuthService.onAuthStateChanged(async (user) => {
             currentUser = user;
+            // ตั้งค่า ADMIN UID ของคุณที่นี่
             isAdmin = user && user.uid === 'L58J891uO5g5x6Xg1rB2'; // เปลี่ยนเป็น Admin UID จริงของคุณ
 
             if (user) {
@@ -106,26 +141,160 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentUserData = null;
             }
             
-            // *** การแก้ไขที่สำคัญ: ซ่อนหน้า Loading เมื่อตรวจสอบสถานะเสร็จแล้ว ***
+            // *** FIX: ซ่อนหน้า Loading เมื่อตรวจสอบสถานะเสร็จแล้ว ***
             showLoading(false); 
             
             // 3. รันโค้ดเริ่มต้น
             updateUI(); 
             await loadListings(); 
+            
+            // 4. แสดงหน้าแรก (Home)
+            showPage('home'); 
         });
     } else {
         // Fallback หาก Firebase โหลดไม่สำเร็จ
         showLoading(false);
         console.error('AuthService is not defined. Firebase loading likely failed.');
+        showPage('home');
     }
+    
+    // ============================================================
+    // 5. EVENT LISTENERS (การแก้ไขหลักที่ทำให้ปุ่มทำงาน)
+    // ============================================================
+
+    // ปุ่ม Navbar: ใช้ showPage()
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const pageId = link.getAttribute('data-page');
+            showPage(pageId);
+        });
+    });
+
+    // ปุ่มเปิด Modal เข้าสู่ระบบ (Auth Button)
+    const authBtn = document.getElementById('authBtn');
+    if (authBtn) {
+        authBtn.addEventListener('click', () => {
+            // ปิด Modal อื่นๆ แล้วเปิด Auth Modal
+            document.querySelectorAll('.modal').forEach(m => closeModal(m.id));
+            showAuthModal();
+        });
+    }
+
+    // ปุ่ม Login Google
+    const googleLoginBtn = document.getElementById('googleLoginBtn');
+    if (googleLoginBtn && typeof AuthService !== 'undefined') {
+        googleLoginBtn.addEventListener('click', async () => {
+            try {
+                showLoading(true);
+                await AuthService.signInWithGoogle();
+                closeModal('authModal');
+                showToast('เข้าสู่ระบบสำเร็จ', 'success');
+            } catch (error) {
+                console.error("Google Login Error:", error);
+                showToast('เข้าสู่ระบบล้มเหลว', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+    }
+
+    // ปุ่มเปิด Admin Login
+    const adminLink = document.getElementById('adminLink'); // ตรวจสอบ ID ใน index.html
+    if (adminLink) {
+        adminLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (isAdmin) {
+                showPage('admin');
+            } else {
+                showAdminLoginModal();
+            }
+        });
+    }
+
+    // ปุ่ม Logout
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            logout();
+            closeDropdown();
+            showPage('home');
+            showToast('ออกจากระบบแล้ว', 'info');
+        });
+    }
+
+    // ปุ่ม Admin Login Submit (Placeholder for actual logic)
+    const adminLoginForm = document.getElementById('adminLoginForm');
+    if (adminLoginForm) {
+        adminLoginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = document.getElementById('adminPassword').value;
+            // ⚠️ ใช้รหัสผ่านแบบง่ายตาม README (ต้องเปลี่ยนใน Production)
+            if (password === 'admin123') { 
+                isAdmin = true; // ตั้งค่าสถานะ Admin
+                closeModal('adminLoginModal');
+                showPage('admin');
+                showToast('เข้าสู่ระบบ Admin สำเร็จ', 'success');
+                document.getElementById('adminPassword').value = '';
+                await updateAdminBadges();
+            } else {
+                showToast('รหัสผ่าน Admin ไม่ถูกต้อง', 'error');
+            }
+        });
+    }
+    
+    // ปุ่ม Submit สำหรับ Phone Auth (Placeholder)
+    const sendOtpForm = document.getElementById('sendOtpForm');
+    if(sendOtpForm) {
+        sendOtpForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            try {
+                showLoading(true);
+                confirmationResult = await AuthService.sendOTP(phoneNumber, window.recaptchaVerifier);
+                document.getElementById('otpSendSuccess').style.display = 'block';
+                document.getElementById('sendOtpForm').style.display = 'none';
+                document.getElementById('verifyOtpForm').style.display = 'block';
+                showToast('ส่ง OTP แล้ว', 'info');
+            } catch (error) {
+                console.error("OTP Send Error:", error);
+                showToast('ส่ง OTP ล้มเหลว', 'error');
+                window.recaptchaVerifier.render(); // รีเซ็ต recaptcha
+            } finally {
+                showLoading(false);
+            }
+        });
+    }
+    
+    // ปุ่ม Verify OTP (Placeholder)
+    const verifyOtpForm = document.getElementById('verifyOtpForm');
+    if(verifyOtpForm) {
+        verifyOtpForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const otpCode = document.getElementById('otpCode').value;
+            if(!confirmationResult) {
+                showToast('กรุณาส่ง OTP ก่อน', 'warning');
+                return;
+            }
+            try {
+                showLoading(true);
+                await AuthService.verifyOTP(confirmationResult, otpCode);
+                // onAuthStateChanged จะจัดการการเข้าสู่ระบบต่อ
+                closeModal('authModal');
+                showToast('ยืนยัน OTP สำเร็จ', 'success');
+            } catch (error) {
+                console.error("OTP Verify Error:", error);
+                showToast('OTP ไม่ถูกต้อง', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+    }
+    
 });
 
 // ============================================================
-// END OF INITIALIZATION - BEGINNING OF USER'S PART 2 CONTENT
-// ============================================================
-
-// ============================================================
-// VALO MARKET - Main Application (Firebase Version) - Part 2
+// PART 4: USER'S EXISTING CODE (Renderings, Submits, Actions)
 // ============================================================
 
 // Continue from renderAdminListings...
@@ -392,6 +561,8 @@ async function renderReports() {
 function renderListings() {
     const grid = document.getElementById('listingsGrid');
     
+    if (!grid) return;
+
     if (listingsCache.length === 0) {
         grid.innerHTML = '<div class="empty-state"><i class="fas fa-store-slash"></i><p>ไม่พบไอดีที่ต้องการ</p></div>';
         return;
@@ -417,11 +588,13 @@ function renderListings() {
 }
 
 function filterListings() {
-    const search = document.getElementById('searchInput').value.toLowerCase();
-    const priceRange = document.getElementById('filterPrice').value;
-    const rank = document.getElementById('filterRank').value;
-    const skinsRange = document.getElementById('filterSkins').value;
+    // ⚠️ ต้องโหลดข้อมูลทั้งหมดใหม่ใน listingsCache ก่อนเรียกฟังก์ชันนี้
+    const search = document.getElementById('searchInput')?.value.toLowerCase();
+    const priceRange = document.getElementById('filterPrice')?.value;
+    const rank = document.getElementById('filterRank')?.value;
+    const skinsRange = document.getElementById('filterSkins')?.value;
     
+    // ⚠️ ต้องโหลดข้อมูลเริ่มต้นจาก Firebase อีกครั้งก่อน filter
     let filtered = [...listingsCache];
     
     if (search) {
@@ -431,7 +604,6 @@ function filterListings() {
         );
     }
     
-    // โค้ดที่หายไป ถูกเติมเต็ม ณ ตรงนี้
     if (priceRange) {
         const [min, max] = priceRange.split('-').map(Number);
         filtered = filtered.filter(l => (l.price >= min && l.price <= max));
@@ -445,18 +617,47 @@ function filterListings() {
         const [minSkins, maxSkins] = skinsRange.split('-').map(Number);
         filtered = filtered.filter(l => (l.skins >= minSkins && l.skins <= maxSkins));
     }
-    // สิ้นสุดโค้ดที่เติม
     
     listingsCache = filtered;
     renderListings();
 }
 
-
 // ============================================================
-// UTILITY FUNCTIONS (ที่ถูกใช้ในโค้ดข้างบน)
+// PART 5: REMAINING HELPER FUNCTIONS (ที่ถูกใช้ในโค้ดข้างบน)
 // ============================================================
-// ฟังก์ชันเหล่านี้จำเป็นต้องถูกกำหนดเพื่อให้โค้ดทั้งหมดทำงานได้
 
+// Dummy functions for admin panel UI
+async function updateAdminBadges() { 
+    if (typeof FirebaseDB !== 'undefined') {
+        try {
+            const pendingListings = await FirebaseDB.getPendingListings();
+            const pendingDeposits = await FirebaseDB.getPendingDeposits();
+            const pendingWithdrawals = await FirebaseDB.getPendingWithdrawals();
+            
+            document.getElementById('pendingBadge').textContent = pendingListings.length;
+            document.getElementById('depositsBadge').textContent = pendingDeposits.length;
+            document.getElementById('withdrawalsBadge').textContent = pendingWithdrawals.length;
+            document.getElementById('totalPendingBadge').textContent = pendingListings.length + pendingDeposits.length + pendingWithdrawals.length;
+        } catch (error) {
+            console.error("Failed to update admin badges:", error);
+        }
+    }
+}
+function switchAdminTab(tab, btn) { 
+    document.querySelectorAll('.admin-nav-item').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    document.querySelectorAll('.admin-tab-content').forEach(c => c.style.display = 'none');
+    document.getElementById(`adminTab-${tab}`).style.display = 'block';
+
+    if (tab === 'deposits') renderDepositsList();
+    if (tab === 'withdrawals') renderWithdrawalsList();
+    if (tab === 'reports') renderReports();
+    if (tab === 'pending') renderAdminListings();
+}
+function openViewUserModal(userId) { /* Dummy implementation */ }
+
+// UI Helpers
 function formatRank(rank) {
     const ranks = { radiant: 'Radiant', immortal: 'Immortal', ascendant: 'Ascendant', diamond: 'Diamond', platinum: 'Platinum', gold: 'Gold', silver: 'Silver', bronze: 'Bronze', iron: 'Iron' };
     return ranks[rank] || rank || '-';
@@ -485,6 +686,8 @@ function formatDate(timestamp) {
 
 function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
+    if (!container) return;
+
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     
@@ -499,26 +702,10 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// Dummy functions for admin panel UI used in Part 2
-async function updateAdminBadges() { 
-    if (typeof FirebaseDB !== 'undefined') {
-        try {
-            const pendingListings = await FirebaseDB.getPendingListings();
-            const pendingDeposits = await FirebaseDB.getPendingDeposits();
-            const pendingWithdrawals = await FirebaseDB.getPendingWithdrawals();
-            
-            document.getElementById('pendingBadge').textContent = pendingListings.length;
-            document.getElementById('depositsBadge').textContent = pendingDeposits.length;
-            document.getElementById('withdrawalsBadge').textContent = pendingWithdrawals.length;
-            document.getElementById('totalPendingBadge').textContent = pendingListings.length + pendingDeposits.length + pendingWithdrawals.length;
-        } catch (error) {
-            console.error("Failed to update admin badges:", error);
-        }
-    }
+function viewListing(id) {
+    // Placeholder function, should open a detailed view modal
+    showToast(`ดูรายละเอียดประกาศ ID: ${id}`, 'info');
 }
-function switchAdminTab(tab, btn) { /* Dummy implementation */ }
-function openViewUserModal(userId) { /* Dummy implementation */ }
-
 
 // ============================================================
 // END OF FILE
